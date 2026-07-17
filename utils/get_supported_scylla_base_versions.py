@@ -4,6 +4,7 @@ import sys
 import re
 import os
 
+from sdcm.utils.parallel_object import ParallelObjectException
 from sdcm.utils.session import create_retry_session
 from sdcm.utils.version_utils import (
     is_enterprise,
@@ -237,8 +238,22 @@ class UpgradeBaseVersion:
         """
         LOGGER.info("Filtering rc versions from base version list...")
         base_version_list = sorted(list(set(base_version_list)), key=ComparableScyllaVersion)
-        filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if "rc" not in v]
-        if not filter_rc:
+        try:
+            available_versions = get_all_versions(self.repo_maps[base_version_list[-1]])
+        except ParallelObjectException as exc:
+            # the repo/list file itself resolved fine, but its package files couldn't be fetched.
+            # this happens when older release artifacts get moved to cold storage (eg. S3 Glacier)
+            # upstream: they still exist, just aren't retrievable via a plain HTTP GET anymore.
+            # treat the version as a confirmed release rather than crash the whole matrix.
+            if any(res.exc is not None and not isinstance(res.exc, ValueError) for res in exc.results):
+                raise
+            LOGGER.warning(
+                "Could not fetch package list for %s, its repository files may be archived: %s",
+                base_version_list[-1],
+                exc,
+            )
+            available_versions = None
+        if available_versions is not None and not [v for v in available_versions if "rc" not in v]:
             # if the release only has rc versions, we don't want to test it as a base version
             base_version_list = base_version_list[:-1]
         if self.scylla_version in ("master",) and not self.base_version_all_sts_versions:
