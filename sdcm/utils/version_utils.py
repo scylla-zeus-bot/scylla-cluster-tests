@@ -281,15 +281,27 @@ class ComparableScyllaOperatorVersion(ComparableScyllaVersion):
         )
 
 
+class RepositoryURLError(ValueError):
+    """A repository URL could not be fetched. Carries the HTTP status code, if any, so
+    callers can distinguish a permanently-unavailable resource (eg. archived to cold
+    storage, returns 403/404) from other, less expected failures."""
+
+    def __init__(self, message: str, status_code: int = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 @lru_cache(maxsize=1024)
 @retrying(n=10, sleep_time=0.1)
 def get_url_content(url, return_url_data=True):
     response = requests.get(url=url)
     if response.status_code != 200:
-        raise ValueError(f"The following repository URL '{url}' is incorrect")
+        raise RepositoryURLError(f"The following repository URL '{url}' is incorrect", status_code=response.status_code)
     response_data = response.text
     if not response_data:
-        raise ValueError(f"The repository URL '{url}' not contains any content")
+        raise RepositoryURLError(
+            f"The repository URL '{url}' not contains any content", status_code=response.status_code
+        )
     if return_url_data:
         return response_data.split("\n")
     return []

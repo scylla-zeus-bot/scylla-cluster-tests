@@ -10,6 +10,7 @@ from sdcm.utils.version_utils import (
     is_enterprise,
     get_all_versions,
     get_branch_version,
+    RepositoryURLError,
     ComparableScyllaVersion,
     get_s3_scylla_repos_mapping,
 )
@@ -240,12 +241,18 @@ class UpgradeBaseVersion:
         base_version_list = sorted(list(set(base_version_list)), key=ComparableScyllaVersion)
         try:
             available_versions = get_all_versions(self.repo_maps[base_version_list[-1]])
-        except ParallelObjectException as exc:
-            # the repo/list file itself resolved fine, but its package files couldn't be fetched.
-            # this happens when older release artifacts get moved to cold storage (eg. S3 Glacier)
-            # upstream: they still exist, just aren't retrievable via a plain HTTP GET anymore.
-            # treat the version as a confirmed release rather than crash the whole matrix.
-            if any(res.exc is not None and not isinstance(res.exc, ValueError) for res in exc.results):
+        except (ParallelObjectException, RepositoryURLError) as exc:
+            underlying_errors = (
+                [res.exc for res in exc.results if res.exc is not None]
+                if isinstance(exc, ParallelObjectException)
+                else [exc]
+            )
+            # a 403 on a repo file that itself resolved fine means S3 rejected the read of an
+            # object it still lists (eg. InvalidObjectState for artifacts archived to cold
+            # storage), not that the repository is broken or missing. treat the version as a
+            # confirmed release rather than crash the whole matrix; anything else re-raises,
+            # including 404 which just as often means a genuinely wrong/missing URL.
+            if any(not isinstance(err, RepositoryURLError) or err.status_code != 403 for err in underlying_errors):
                 raise
             LOGGER.warning(
                 "Could not fetch package list for %s, its repository files may be archived: %s",
