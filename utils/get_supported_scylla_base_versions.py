@@ -247,12 +247,15 @@ class UpgradeBaseVersion:
                 if isinstance(exc, ParallelObjectException)
                 else [exc]
             )
-            # a 403 on a repo file that itself resolved fine means S3 rejected the read of an
-            # object it still lists (eg. InvalidObjectState for artifacts archived to cold
-            # storage), not that the repository is broken or missing. treat the version as a
-            # confirmed release rather than crash the whole matrix; anything else re-raises,
-            # including 404 which just as often means a genuinely wrong/missing URL.
-            if any(not isinstance(err, RepositoryURLError) or err.status_code != 403 for err in underlying_errors):
+            # this URL (or, for a per-arch Packages fetch, the repo file it was derived from)
+            # was already confirmed to exist as this version's own object in the bucket by the
+            # independent S3 listing that built self.repo_maps. S3's InvalidObjectState error
+            # code means that object is real but was moved to cold storage, not that the
+            # repository is broken or missing, so treat the version as a confirmed release
+            # rather than crash the whole matrix. Any other failure re-raises, including a
+            # bare 403 without that error code (eg. AccessDenied from a broken ACL/policy) and
+            # 404 (NoSuchKey), both of which just as often mean a genuinely broken/wrong URL.
+            if any(getattr(err, "s3_error_code", None) != "InvalidObjectState" for err in underlying_errors):
                 raise
             LOGGER.warning(
                 "Could not fetch package list for %s, its repository files may be archived: %s",
