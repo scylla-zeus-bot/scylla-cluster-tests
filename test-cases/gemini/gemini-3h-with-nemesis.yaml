@@ -10,8 +10,6 @@ test_metadata:
   duration_class: short
   supported_backends:
     - aws
-    - gce
-    - azure
   stress_tools:
     - gemini
   workload: mixed
