@@ -1,10 +1,12 @@
 test_duration: 180
 test_metadata:
   description: >-
-    Streaming-features test validating the per-partition request-rate limit by
-    driving scylla-bench write and read load against a small set of hot
-    partitions and confirming the cluster rejects excess requests without
-    overload, using scylla-bench instead of cassandra-stress to avoid retry storms.
+    Streaming-features test validating the per-partition request-rate limit:
+    measures write/read latency and throughput with the limit set, with and
+    without additional heavy several-partition load, asserting the limit adds
+    negligible baseline overhead while significantly improving latency and
+    throughput when hot partitions are stressed. Uses scylla-bench instead of
+    cassandra-stress to avoid retry storms.
   test_type: features
   tier: tier1
   duration_class: short

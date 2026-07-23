@@ -1,9 +1,11 @@
 test_duration: 240
 test_metadata:
   description: >-
-    Streaming-features test validating the compaction throughput limit setting by
-    running a sustained cassandra-stress write workload against a 3-node Scylla
-    cluster and confirming compaction bandwidth stays within the configured bound.
+    Streaming-features test measuring how capping compaction_throughput_mb_per_sec
+    at several fractions of measured disk write bandwidth affects write latency
+    and throughput versus an unlimited baseline; flags any missing improvement
+    via an InfoEvent. Compaction bandwidth adherence itself is verified via
+    monitoring dashboards, not asserted by this test.
   test_type: features
   tier: tier1
   duration_class: short
